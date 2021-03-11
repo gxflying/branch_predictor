@@ -1,0 +1,9 @@
+{
+	"folders": [],
+	"settings": {
+		"terminal.integrated.automationShell.windows": "C:\\Program Files\\Git\\git-bash.exe",
+		"terminal.integrated.automationShell.linux": "C:\\Program Files\\Git\\git-bash.exe",
+		"terminal.integrated.automationShell.osx": "C:\\Program Files\\Git\\git-bash.exe",
+
+	}
+}
