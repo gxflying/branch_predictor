@@ -1,3 +1,7 @@
 rm -rf ./*; cmake -G"Unix Makefiles" ../predictor/cpb2004_base_tage/
 make
 ./CPredictor.exe ../../trace_log_from_BPC/evaluationTraces.Final/SHORT_MOBILE-101.bt9.trace 1
+
+
+git commit -m "reconstruct project dir"
+git push origin master

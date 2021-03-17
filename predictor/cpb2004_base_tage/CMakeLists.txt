@@ -9,7 +9,7 @@ set (CMAKE_CXX_COMPILER "g++")
 project(CPredictor)
 
 
-add_subdirectory("./3rd_part/pystring")
+add_subdirectory("../../3rd_part/pystring" binary_dir)
 
 ########## build time lib setting
 #LINK_DIRECTORIES("/ddd/sss")           # build time lib check path
@@ -23,15 +23,18 @@ message (STATUS "------------------------- ${CMAKE_CXX_FLAGS}")
 #add_compile_options(-std=c++11 -Wall -g -O0)
 
 # add header file path
-include_directories("./3rd_part/pystring" ".")
+include_directories("../../3rd_part/pystring"  "../../trace_reader" "../../framework" ".")
+
 
 # get source files in current dir
-aux_source_directory(. DIR_SRCS)
+aux_source_directory(. PREDICTOR_SRCS)
+aux_source_directory(../../framework FRAMEWORK_SRCS)
+aux_source_directory(../../trace_reader TRACE_READER_SRCS)
 
 # Define executable target
 #set(SRCS cbp_inst.cc main.cc op_state.cc predictor.cc tread.cc ./3rd_part/pystring/pystring.cpp)
 message (STATUS "xxxx ${DIR_SRCS}")
-add_executable(CPredictor ${DIR_SRCS})
+add_executable(CPredictor ${PREDICTOR_SRCS} ${FRAMEWORK_SRCS} ${TRACE_READER_SRCS})
 
 #set(SRCS ${DIR_SRCS} ./3rd_part/pystring/pystring.cpp)
 #add_executable(CPredictor ${SRCS})
