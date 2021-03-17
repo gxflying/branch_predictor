@@ -35,7 +35,8 @@ run:
 	./predictor.exe  ../trace_log_from_BPC/evaluationTraces.Final/evaluationTraces/SHORT_MOBILE-101.bt9.trace
 
 	make clean; make;  ./predictor.exe ../trace_log_from_BPC/evaluationTraces.Final/SHORT_MOBILE-101.bt9.trace 0
-	"C:\\cmake-3.19.6-win64-x64\\bin\\cmake.exe" -G"Unix Makefiles" ../
+	cmake -G"Unix Makefiles" ../
+	./CPredictor.exe ../../trace_log_from_BPC/evaluationTraces.Final/SHORT_MOBILE-101.bt9.trace 1
 
 .PHONY : clean
 clean :
