@@ -63,9 +63,11 @@ main(int argc, char* argv[])
 
         // predict_branch() tells the trace reader how you have predicted the branch
         bool actual_taken    = br.taken;
-        if( predicted_taken != actual_taken) 
-        {
-            mispredicts++;
+        if (br.is_conditional) {
+            if( predicted_taken != actual_taken) 
+            {
+                mispredicts++;
+            }
         }
 
         
@@ -83,9 +85,9 @@ main(int argc, char* argv[])
     GETTIMEOFDAY(&tv, 0);
     int64_t t1 =  (int64_t)tv.tv_sec * 1000000 + (int64_t)tv.tv_usec;
     printf("Time consume : %lld \r\n", t1 - t0);
-
+    printf("g_total_instr_count : %lld\n", treader.g_total_instr_count);
     printf("total instructions : %lld   mispredict : %lld\r\n", instr_cnt, mispredicts);
-    printf("mispredict ratio : %f\r\n", 1.0*mispredicts/instr_cnt);
+    printf("mispredict ratio : %f\r\n", 1000.0*mispredicts/treader.g_total_instr_count);
 
 }
 

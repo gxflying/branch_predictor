@@ -38,6 +38,8 @@ private:
 	map<string, int> mapSubType;
 	map<string, int> mapDirct;
 	map<string, int> mapCond;
+public:	
+	unsigned long long g_total_instr_count;
 
 private:
 	void parseNode(const std::vector<std::string> & vec) {
@@ -154,6 +156,20 @@ public:
 			std::vector<std::string> vec;			
 			pystring::split(line, vec, "");
 
+			string token = "total_instruction_count:";
+            auto gzip_suffix_pos = line.find(token);
+            if (gzip_suffix_pos != std::string::npos) {
+                auto pos = line.find_first_of('#');
+                if (pos != std::string::npos) {
+                    line.erase(pos, std::numeric_limits<std::string::size_type>::max());
+					//printf("line : %s\n", line.c_str());
+                }
+				line.erase(0, token.size());				
+				//printf("line : %s\n", line.c_str());
+
+				g_total_instr_count = strtoull(line.c_str(), NULL, 0);
+			}
+
 			const char * lineBuf = line.c_str();
 			volatile bool bNodeStr = lineBuf[0]=='N' && lineBuf[1]=='O' && lineBuf[2]=='D' && lineBuf[3]=='E';
 			volatile bool bEdgeStr = lineBuf[0]=='E' && lineBuf[1]=='D' && lineBuf[2]=='G' && lineBuf[3]=='E';
@@ -196,6 +212,8 @@ public:
 			if(!pystring::isdigit(line)) {
 				return 0;
 			}
+
+
 			// mapEdge ->  vtaddr ptaddr src_id dest_id taken
 			unsigned int stream_id = stoull(pystring::strip(line));
 			//printf("%s : ", line.c_str() );
