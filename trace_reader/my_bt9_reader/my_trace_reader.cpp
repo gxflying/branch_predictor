@@ -1,48 +1,6 @@
-#include <string>
-#include <iostream>
-#include <fstream>
-#include "cbp_assert.h"
-#include "tread.h"
-#include <stdio.h>
-#include <string.h>
-#include <cstdio>
-#include <map>
-#include <vector>
-#include <regex>
-#include "pystring.h"
+#include "my_trace_reader.h"	
 
-using namespace std;
-
-typedef struct __attribute__((packed)) trace_meta_ {
-unsigned long long svaddr;
-unsigned long long tvaddr;
-unsigned char packed_info;   
-} stTraceMeta;
-
-class branch_record_c1 : public branch_record_c
-{
-	public:
-		bool taken;
-	branch_record_c1() {
-		memset((char *)this, 0, sizeof(branch_record_c1));
-	}
-};
-
-class CMyGzTraceReader
-{
-
-private:
-	ifstream *pFileIn;
-	map<unsigned int, vector<long long>> mapNode;
-	map<unsigned int, vector<long long>> mapEdge;
-	map<string, int> mapSubType;
-	map<string, int> mapDirct;
-	map<string, int> mapCond;
-public:	
-	unsigned long long g_total_instr_count;
-
-private:
-	void parseNode(const std::vector<std::string> & vec) {
+    void CMyGzTraceReader::parseNode(std::vector<std::string> & vec) {
 		//#NODE   id      virtual_address    physical_address          opcode  size 
 		//NODE    0                    0                    -                0    0      
 		//NODE    1         0x558eb0ecfc           0x60de1cfc       0x54fffd28    4    class:  JMP+DIR+CND		
@@ -74,7 +32,7 @@ private:
 		//*/
 	};
 
-	void parseEdge(const std::vector<std::string> & vec) {
+	void CMyGzTraceReader::parseEdge(std::vector<std::string> & vec) {
 		///*
 		//#EDGE    id  src_id   dest_id  taken      br_virt_target       br_phy_target   inst_cnt 
 		//EDGE      0      0      1        N                    0                    -       23 	traverse_cnt:        1  
@@ -103,8 +61,7 @@ private:
 		//*/
 	};
 
-public:
-	CMyGzTraceReader(char* fileName, char * bugz) {
+    	CMyGzTraceReader::CMyGzTraceReader(char* fileName, char * bugz) {
 		char trace_name_copy[256];
 		char trnm_cmdline[256];
 		memset((char *) trace_name_copy,  0, 256);
@@ -118,7 +75,9 @@ public:
 		}
 		pFileIn = new ifstream(pystring::os::path::basename(fileName).c_str(), ios::in );
 		printf("filename : %s  \r\n", pystring::os::path::basename(fileName).c_str());
-
+		if(!pFileIn) {
+			printf("open file error\n");
+		}
 		//SUBTYPE_MAP = {"RET":0, "CALL":1, "JMP":2, "NONE":3}
 		//DIRECT_MAP  = {"DIR":0, "IND":1, "NONE":3}
 		//COND_MAP    = {"CND":0, "UCD":1, "NONE":3}
@@ -134,25 +93,24 @@ public:
 		mapCond.insert(std::make_pair("NONE", 2));
 
 	};
-	~CMyGzTraceReader() {
+	CMyGzTraceReader::~CMyGzTraceReader() {
 		if (pFileIn) {
 			delete pFileIn;
 		}
 
 	};
-	bool preoperation()
+	bool CMyGzTraceReader::preoperation()
 	{
 		volatile bool bNodeStart = false;
 		volatile bool bEdgeStart = false;
 		volatile bool bInstrSteamStart = false;
 		volatile int loop = 0;
-		//char line[1024];
-		//while (pFileIn->getline (line, 1024))
+		//char line_t[1024];
+		//while (pFileIn->getline (line_t, 1024))
 		string line;
-		while (getline (*pFileIn, line))
+        while (getline (*pFileIn, line))
 		{
 			loop++;
-			//if(loop >= 200) break;
 			std::vector<std::string> vec;			
 			pystring::split(line, vec, "");
 
@@ -162,17 +120,19 @@ public:
                 auto pos = line.find_first_of('#');
                 if (pos != std::string::npos) {
                     line.erase(pos, std::numeric_limits<std::string::size_type>::max());
-					//printf("line : %s\n", line.c_str());
+					printf("line : %s\n", line.c_str());
                 }
 				line.erase(0, token.size());				
-				//printf("line : %s\n", line.c_str());
+				printf("line : %s\n", line.c_str());
 
-				g_total_instr_count = strtoull(line.c_str(), NULL, 0);
+				g_total_instr_count = strtoull(line.c_str() , NULL, 0);
 			}
 
 			const char * lineBuf = line.c_str();
 			volatile bool bNodeStr = lineBuf[0]=='N' && lineBuf[1]=='O' && lineBuf[2]=='D' && lineBuf[3]=='E';
 			volatile bool bEdgeStr = lineBuf[0]=='E' && lineBuf[1]=='D' && lineBuf[2]=='G' && lineBuf[3]=='E';
+
+
 			//printf("a -> %d %d %s\r\n", bNodeStr, bEdgeStr, lineBuf);
 			if(!bNodeStart && bNodeStr) {   		// FOR MODE lines
 				bNodeStart = true;
@@ -201,13 +161,14 @@ public:
 
 	};
 
-	bool getLine(branch_record_c1 * br) {
+	bool CMyGzTraceReader::getLine(branch_record_c1 * br) {
 		std::string line = "";
 		//*
 		static int loop;
 		//while (getline (*pFileIn, line))
 		if (getline (*pFileIn, line))
 		{
+			//printf("-- %s \n", line.c_str());
 			//if(loop++ > 600) break;
 			if(!pystring::isdigit(line)) {
 				return 0;
@@ -239,7 +200,8 @@ public:
 			//DIRECT_MAP  = {"DIR":0, "IND":1, "NONE":3}
 			//COND_MAP    = {"CND":0, "UCD":1, "NONE":3}
 			br->instruction_addr = vsaddr;
-			br->instruction_next_addr = vtaddr;
+			//br->instruction_next_addr = vtaddr;
+			br->branch_target = vtaddr;
 			br->is_conditional = br_cond == 0;
 			br->is_indirect = br_direct == 1;
 			br->is_return = br_subType == 0;
@@ -254,46 +216,3 @@ public:
 		//*/
 	};
 	
-};
-
-
-
-class CMyTraceReader
-{
-
-private:
-	ifstream *pFileIn;
-
-public:
-	CMyTraceReader(char* fileName) {
-		pFileIn = new ifstream(fileName, ios::in | ios::binary);
-		CBP_ASSERT(pFileIn);
-	};
-	~CMyTraceReader() {
-		if (pFileIn) {
-			delete pFileIn;
-		}
-	};
-
-	bool getLine(branch_record_c1 * br) {
-		if (!pFileIn) {
-			printf("trace file NOT opened !!");
-		}
-		if((pFileIn) && (!(pFileIn->eof()))) {
-			stTraceMeta meta;
-			pFileIn->read((char *) &meta, sizeof(stTraceMeta));
-			br->instruction_addr = meta.svaddr;
-			br->instruction_next_addr = meta.tvaddr;
-			br->is_conditional = ((meta.packed_info>>1) & 0x3) == 0;
-			br->is_indirect = ((meta.packed_info>>3) & 0x3) == 1;
-			br->is_return = ((meta.packed_info >>5) & 0x3) == 0;
-			br->is_call = ((meta.packed_info >>5) & 0x3) == 1;
-			br->taken = meta.packed_info & 0x01;		
-			return true;
-		} else {
-			return false;
-		};
-	};
-};
-
-

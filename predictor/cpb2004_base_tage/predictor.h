@@ -232,6 +232,7 @@ public:
 		{
 			gtable[i] = new gentry[1 << (LOGG)];
 		}
+		printf("-------------------2004 base predictor------------\n");
 	}
 
 	// index function for the bimodal table
