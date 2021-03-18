@@ -23,13 +23,14 @@ message (STATUS "------------------------- ${CMAKE_CXX_FLAGS}")
 #add_compile_options(-std=c++11 -Wall -g -O0)
 
 # add header file path
-include_directories("../../3rd_part/pystring"  "../../trace_reader" "../../framework" ".")
+include_directories("../../3rd_part/pystring"  "../../trace_reader" "../../trace_reader/my_bt9_reader" "../../framework" ".")
 
 
 # get source files in current dir
 aux_source_directory(. PREDICTOR_SRCS)
 aux_source_directory(../../framework FRAMEWORK_SRCS)
-aux_source_directory(../../trace_reader TRACE_READER_SRCS)
+aux_source_directory(../../trace_reader  TRACE_READER_SRCS)
+aux_source_directory( ../../trace_reader/my_bt9_reader TRACE_READER_SRCS)
 
 # Define executable target
 #set(SRCS cbp_inst.cc main.cc op_state.cc predictor.cc tread.cc ./3rd_part/pystring/pystring.cpp)
