@@ -43,6 +43,8 @@ OBJDIR := $(CBP_BASE)/bin
 SRC    := $(CBP_BASE)/sim
 VPATH  := $(SRC)
 
+#PREDICTOR_PATH = ./AndreSeznecLimited/cbp64KB
+PREDICTOR_PATH = ./AndreSeznecLimited/cbp8KB
 #LDLIBS   += -lboost_iostreams
 LDLIBS   += -lboost_iostreams-mgw8-mt-d-x64-1_75
 
@@ -50,7 +52,8 @@ LDFLAGS += -L$(BOOST)/stage/lib -Wl,-rpath $(BOOST)/stage/lib
 
 CPPFLAGS := -O3 -Wall -std=c++11 -Wextra -Winline -Winit-self -Wno-sequence-point\
            -Wno-unused-function -Wno-inline -fPIC -W -Wcast-qual -Wpointer-arith -Woverloaded-virtual\
-           -I$(CBP_BASE) -I$(BOOST) -I$(BOOST)/iostreams -I$(BOOST)/iostreams/device
+           -I$(CBP_BASE) -I$(BOOST) -I$(BOOST)/iostreams -I$(BOOST)/iostreams/device -I.\
+		   -I$(PREDICTOR_PATH)
 
 PROGRAMS := predictor
 
@@ -58,8 +61,13 @@ objects = predictor.o main.o
 
 all: $(PROGRAMS)
 
-predictor : $(objects)
-	$(CXX) $(CPPFLAGS) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+SRC = main.cc $(PREDICTOR_PATH)/predictor.cc
+
+#predictor : $(objects)
+#	$(CXX) $(CPPFLAGS) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+predictor : $(SRC)
+	$(CXX) $(CPPFLAGS) $(LDFLAGS) $(SRC) -o predictor $(LDLIBS)
 
 dbg: clean
 	$(MAKE) DBG_BUILD=1 all
@@ -67,4 +75,4 @@ dbg: clean
 clean:
 	rm -f $(PROGRAMS) $(objects)
 run:
-	reset; ./predictor.exe ../../../trace_log_from_BPC/evaluationTraces.Final-2016/evaluationTraces/SHORT_SERVER-21.bt9.trace
+	reset; ./predictor.exe ../../log/LONG_MOBILE-20.bt9.trace
