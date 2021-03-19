@@ -1074,6 +1074,7 @@ PREDICTOR::PREDICTOR (void)
   bfreq.init (P4_SPSIZE);	// number of frequency bins = P4 spectrum size
 
   initSC ();
+  printf("----------PoTAGE----------------\n");
 }
 
 

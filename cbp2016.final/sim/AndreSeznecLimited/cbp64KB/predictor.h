@@ -480,6 +480,7 @@ public:
   {
 
     reinit ();
+	printf("----------cbp 2016 64k----------------\n");
 #ifdef PRINTSIZE
     predictorsize ();
 #endif

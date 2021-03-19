@@ -406,10 +406,6 @@ inter += EWIDTH * (1 << LOGSIZEUPS);	// the extra weight of the partial sums
 }
 
 
-
-
-
-
 class PREDICTOR
  {
 public:
@@ -417,6 +413,7 @@ public:
   {
 
     reinit ();
+	printf("----------cbp 2016 8k----------------\n");
 #ifdef PRINTSIZE
     predictorsize ();
 #endif
