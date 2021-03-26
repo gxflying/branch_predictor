@@ -43,8 +43,19 @@ OBJDIR := $(CBP_BASE)/bin
 SRC    := $(CBP_BASE)/sim
 VPATH  := $(SRC)
 
-#PREDICTOR_PATH = ./AndreSeznecLimited/cbp64KB
+LOOP_TAIL_REPAIR ?= 0
+PRED ?= 8k
 PREDICTOR_PATH = ./AndreSeznecLimited/cbp8KB
+ifeq ($(PRED),64k)
+PREDICTOR_PATH = ./AndreSeznecLimited/cbp64KB
+endif
+ifeq ($(PRED),boom)
+PREDICTOR_PATH = ./AndreSeznecLimited/sonicBoom
+endif
+ifeq ($(PRED),btfn)
+PREDICTOR_PATH = ./AndreSeznecLimited/sonicBoom_btfn
+endif
+
 #LDLIBS   += -lboost_iostreams
 LDLIBS   += -lboost_iostreams-mgw8-mt-d-x64-1_75
 
@@ -53,6 +64,7 @@ LDFLAGS += -L$(BOOST)/stage/lib -Wl,-rpath $(BOOST)/stage/lib
 CPPFLAGS := -O3 -Wall -std=c++11 -Wextra -Winline -Winit-self -Wno-sequence-point\
            -Wno-unused-function -Wno-inline -fPIC -W -Wcast-qual -Wpointer-arith -Woverloaded-virtual\
            -I$(CBP_BASE) -I$(BOOST) -I$(BOOST)/iostreams -I$(BOOST)/iostreams/device -I.\
+		   -DLOOP_TAIL_REPAIR=$(LOOP_TAIL_REPAIR) \
 		   -I$(PREDICTOR_PATH)
 
 PROGRAMS := predictor
@@ -75,4 +87,10 @@ dbg: clean
 clean:
 	rm -f $(PROGRAMS) $(objects)
 run:
-	reset; ./predictor.exe ../../log/LONG_MOBILE-20.bt9.trace
+	reset; ./predictor ../../log/SHORT_SERVER-27.bt9.trace
+
+# make clean; make PRED=boom LOOP_TAIL_REPAIR=0 -j 32
+#
+#
+#
+#

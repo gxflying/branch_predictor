@@ -267,10 +267,18 @@ OpType get_opType(const bt9::BrClass & br_class, const unsigned int Node_idx, st
 
 int main(int argc, char* argv[]){
   
-  if (argc != 2) {
+  if (argc < 2) {
     printf("usage: %s <trace>\n", argv[0]);
     exit(-1);
   }
+
+  // FILE * fp_ = NULL;
+  // if (argc >=3) {
+  //   fp_ = fopen(argv[1], "a+");
+  //   if(!fp_) {
+  //     printf("open file error");
+  //   }
+  // }
   
   ///////////////////////////////////////////////
   // Init variables
@@ -330,7 +338,12 @@ int main(int argc, char* argv[]){
       stBr_record brRecord_misp;
 
       for (auto it = bt9_reader.begin(); it != bt9_reader.end(); ++it) {
-        //CheckHeartBeat(++numIter, numMispred); //Here numIter will be equal to number of branches read
+        ++numIter;
+        //CheckHeartBeat(numIter, numMispred); //Here numIter will be equal to number of branches read
+
+        if (numIter > 5000) {
+          //break;
+        } 
 
         try {
           bt9::BrClass br_class = it->getSrcNode()->brClass();
@@ -358,7 +371,7 @@ int main(int argc, char* argv[]){
             //printf("COND ");
             bool predDir = false;
 
-            predDir = brpred->GetPrediction(PC);
+            predDir = brpred->GetPrediction(PC, branchTaken);
             brpred->UpdatePredictor(PC, opType, branchTaken, predDir, branchTarget); 
 
             if(predDir != branchTaken){
@@ -366,7 +379,6 @@ int main(int argc, char* argv[]){
 
             }
             cond_branch_instruction_counter++;
-
           }
           else if (br_class.conditionality == bt9::BrClass::Conditionality::UNCONDITIONAL) { // for predictors that want to track unconditional branches
             uncond_branch_instruction_counter++;
@@ -395,15 +407,24 @@ int main(int argc, char* argv[]){
     //NOTE: competitors are judged solely on MISPRED_PER_1K_INST. The additional stats are just for tuning your predictors.
     GETTIMEOFDAY(&tv, 0);
     int64_t t1 =  (int64_t)tv.tv_sec * 1000000 + (int64_t)tv.tv_usec;
-    printf("Time consume : %lld \r\n", t1 - t0);
-      printf("  TRACE \t : %s" , trace_path.c_str()); 
-      printf("  NUM_INSTRUCTIONS            \t : %10llu\n",   total_instruction_counter);
-      printf("  NUM_BR                      \t : %10llu\n",   branch_instruction_counter-1); //JD2_2_2016 NOTE there is a dummy branch at the beginning of the trace...
-      printf("  NUM_UNCOND_BR               \t : %10llu\n",   uncond_branch_instruction_counter);
-      printf("  NUM_CONDITIONAL_BR          \t : %10llu\n",   cond_branch_instruction_counter);
-      printf("  NUM_MISPREDICTIONS          \t : %10llu\n",   numMispred);
-      printf("  MISPRED_PER_1K_INST         \t : %10.4f\n",   1000.0*(double)(numMispred)/(double)(total_instruction_counter));
-      printf("\n");
+    // printf("Time consume : %lld \r\n", t1 - t0);
+    // printf("  TRACE \t : %s" , trace_path.c_str()); 
+    // printf("  NUM_INSTRUCTIONS            \t : %10llu\n",   total_instruction_counter);
+    // printf("  NUM_BR                      \t : %10llu\n",   branch_instruction_counter-1); //JD2_2_2016 NOTE there is a dummy branch at the beginning of the trace...
+    // printf("  NUM_UNCOND_BR               \t : %10llu\n",   uncond_branch_instruction_counter);
+    // printf("  NUM_CONDITIONAL_BR          \t : %10llu\n",   cond_branch_instruction_counter);
+    // printf("  NUM_MISPREDICTIONS          \t : %10llu\n",   numMispred);
+    // printf("  loopPredTotalCnt : %lld    loopPredCorrectCnt : %lld      \t : %10.4f\n",  brpred->loopPredTotalCnt, 
+    //                      brpred->loopPredCorrectCnt, 1.0*brpred->loopPredCorrectCnt/brpred->loopPredTotalCnt);
+    // printf("  MISPRED_PER_1K_INST         \t : %10.4f\n",   1000.0*(double)(numMispred)/(double)(total_instruction_counter));
+    // printf("\n");
+
+    // if (fp_) {
+    //   fprintf(fp_, "%10.4f\t%10.4f\r\n", 1000.0*(double)(numMispred)/(double)(total_instruction_counter), 1.0*brpred->loopPredCorrectCnt/brpred->loopPredTotalCnt);
+    //   fclose(fp_);
+    // }
+    printf("%10.4f\t%10.4f\r\n", 1000.0*(double)(numMispred)/(double)(total_instruction_counter), 1.0*brpred->loopPredCorrectCnt/brpred->loopPredTotalCnt);
+
 }
 
 

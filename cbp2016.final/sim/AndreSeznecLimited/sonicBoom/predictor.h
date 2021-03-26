@@ -17,16 +17,19 @@
 #define PRINTSIZE
 #include <vector>
 
-#define SC // Enables the statiscal corrctor + 5.7 % MPKI without SC
+//#define SC // Enables the statiscal corrctor + 5.7 % MPKI without SC
 
 //#define GSC			  // global history in SC  + 0.4% //if no GSC, no local, no loop: +3.2 %
 //#define IMLI		  // 0.2 %
 //#define LOCALH		  // + 0.9 % without local
 #define LOOPPREDICTOR //loop predictor enable //0.4 % mispred reduction
+#ifndef LOOP_TAIL_REPAIR
+#define LOOP_TAIL_REPAIR 0
+#endif
 
 //The statistical corrector components
 //The two BIAS tables in the SC component
-//We play with confidence heres
+//We play with confidence here
 #define LOGBIAS 7
 int8_t Bias[(1 << LOGBIAS)];
 
@@ -249,23 +252,28 @@ int BI;				  // index of the bimodal table
 bool pred_taken;	  // prediction
 
 #ifdef LOOPPREDICTOR
-//parameters of the loop predictor
-#define LOGL 3
+//parameters of the loop predictor   ///////////////////////////// LOOP predictor ////////////////////////////
+#define LOGL 4    // 16 entry
 #define WIDTHNBITERLOOP 10 // we predict only loops with less than 1K iterations
+#define MAXITERATION ((1<<WIDTHNBITERLOOP)-1)
 #define LOOPTAG 10		   //tag width in the loop predictor
+#define LOOPAGE 3          //age width in the loop predictor
+#define LOOPCONF 3          //confid width in the loop predictor
+#define LOGLOOPWAYS 0       // 4 way associ in log2
+#define LOOPWAYS (1<<LOGLOOPWAYS)      // 4 way associ
+#define CONFLOOP ((1<<LOOPCONF)-1)
 
 class lentry //loop predictor entry
 {
 public:
 	uint16_t NbIter;	  //10 bits
-	uint8_t confid;		  // 4bits
 	uint16_t CurrentIter; // 10 bits
-
 	uint16_t TAG; // 10 bits
-	uint8_t age;  // 4 bits
-	bool dir;	  // 1 bit
 
-	//39 bits per entry
+	uint8_t confid;		  // 3 bits
+	uint8_t age;  // 3 bits
+	bool dir;	  // 1 bit
+	//37 bits per entry
 	lentry()
 	{
 		confid = 0;
@@ -277,9 +285,11 @@ public:
 	}
 };
 
-lentry *ltable; //loop predictor table
+lentry * ltable; //loop predictor table
+lentry * loopways[LOOPWAYS];
 //variables for the loop predictor
 bool predloop; // loop predictor prediction
+bool loopTagMatch[LOOPWAYS], loopCounterMatch[LOOPWAYS];
 int LIB;
 int LI;
 int LHIT;		 //hitting way in the loop predictor
@@ -304,15 +314,14 @@ int predictorsize()
 	STORAGESIZE += 10; //the TICK counter
 
 	fprintf(stderr, " (TAGE %d) ", STORAGESIZE);
-#ifdef SC
 #ifdef LOOPPREDICTOR
 
-	inter = (1 << LOGL) * (2 * WIDTHNBITERLOOP + LOOPTAG + 4 + 4 + 1);
+	inter = (1 << LOGL) * (2 * WIDTHNBITERLOOP + LOOPTAG + LOOPAGE + LOOPCONF + 1) * LOOPWAYS;
 	fprintf(stderr, " (LOOP %d) ", inter);
 	STORAGESIZE += inter;
 
 #endif
-
+#ifdef SC
 	inter = WIDTHRESP * (1 << LOGSIZEUP); //the update threshold counters
 	inter += WIDTHRES;
 	inter += EWIDTH * (1 << LOGSIZEUPS); // the extra weight of the partial sums
@@ -374,12 +383,28 @@ public:
 			string fileName = fileName_base + string(index_) ;
 			FP_info = fopen(fileName.c_str(), "w");			
 		}
-
 		fprintf(FP_info, "%lx\t%ld\t%ld\r\n", l1, l2, l3);
-
 		my_counter++;
-
 	}
+#ifdef LOOPPREDICTOR	
+	void write_info_loop(unsigned long long PC , lentry * entry , bool match, bool alloc, bool taken) {
+		string fileName_base = "./info/";
+		char index_[64] = {0};
+		if (!FP_info) {
+			sprintf(index_, "%lld.txt", my_counter);
+			string fileName = fileName_base + string(index_) ;
+			FP_info = fopen(fileName.c_str(), "w");
+		}
+		if ((my_counter !=0) && ((my_counter % 100000)==0)) {
+			fclose(FP_info);
+			sprintf(index_, "%lld.txt", my_counter);
+			string fileName = fileName_base + string(index_) ;
+			FP_info = fopen(fileName.c_str(), "w");			
+		}
+		fprintf(FP_info, "%llx\t%ld\t%ld\t%ld\t%lx\t%ld\t%ld\t%ld\t%ld \r\n", PC, entry->confid, entry->CurrentIter, entry->NbIter, entry->TAG, entry->age, match, alloc, taken );
+		my_counter++;
+	}	
+#endif	
 	~PREDICTOR() {
 		if(FP_info) {
 			fclose(FP_info);
@@ -388,12 +413,12 @@ public:
 public:
 	PREDICTOR(void)
 	{
-		loopPredTotalCnt = -1;
-		loopPredCorrectCnt = 0;
+		loopPredTotalCnt = 0;
+		loopPredCorrectCnt = 0;		
 		my_counter = 0;
 		FP_info = NULL;
 		reinit();
-		printf("----------cbp 2016 8k----------------\n");
+		printf("----------sonic bomm predictor----------------\n");
 #ifdef PRINTSIZE
 		predictorsize();
 #endif
@@ -437,7 +462,11 @@ public:
 		}
 
 #ifdef LOOPPREDICTOR
-		ltable = new lentry[1 << (LOGL)];
+		//ltable = new lentry[1 << (LOGL)];
+		for (int i = 0; i<LOOPWAYS; i++) {
+			loopways[i] = new lentry[1 << (LOGL)];
+
+		}
 #endif
 
 		gtable[1] = new gentry[NBBANK[0] * (1 << LOGG)];
@@ -805,21 +834,30 @@ public:
 		// computes the TAGE table addresses and the partial tags
 		Tagepred(PC);
 		pred_taken = tage_pred;
-#ifndef SC
-		return (tage_pred);
-#endif
-#ifdef LOOPPREDICTOR
 
+#ifdef LOOPPREDICTOR
 		predloop = getloop(PC); // loop prediction
-		pred_taken = ((WITHLOOP >= 0) && (LVALID)) ? predloop : pred_taken;
-		if ((WITHLOOP >= 0) && (LVALID))  {
+#if LOOP_TAIL_REPAIR && (LOOP_TAIL_REPAIR == 1)
+		pred_taken = LVALID ? ! pred_taken : pred_taken;
+		if (LVALID) {
 			loopPredTotalCnt++;
-			if(predloop == actual_taken ) {
-				loopPredCorrectCnt++;
+			if( actual_taken == pred_taken)  {
+				loopPredCorrectCnt++;	
 			}
 		}
+#else	
+		pred_taken = LVALID ? predloop : pred_taken;
+		if (LVALID) {
+			loopPredTotalCnt++;
+			if( actual_taken == predloop)  {
+				loopPredCorrectCnt++;	
+			}
+		}		
+#endif	
+#endif
 
-				
+#ifndef SC
+		return (pred_taken);
 #endif
 		pred_inter = pred_taken;
 		//Compute the SC prediction
@@ -1001,7 +1039,6 @@ public:
 						 bool resolveDir, bool predDir, UINT64 branchTarget)
 	{
 
-#ifdef SC
 #ifdef LOOPPREDICTOR
 		if (LVALID)
 		{
@@ -1010,6 +1047,9 @@ public:
 		}
 		loopupdate(PC, resolveDir, (pred_taken != resolveDir));
 #endif
+
+#ifdef SC
+
 		bool SCPRED = (LSUM >= 0);
 		if (pred_inter != SCPRED)
 		{
@@ -1131,6 +1171,7 @@ public:
 
 			for (int I = DEP; I < NHIST; I += 2)
 			{
+
 				int i = I + 1;
 				bool Done = false;
 				if (NOSKIP[i])
@@ -1141,6 +1182,7 @@ public:
 
 #define DIPINSP
 #ifdef DIPINSP
+
 							gtable[i][GI[i]].u = ((MYRANDOM() & 31) == 0);
 // protect randomly from fast replacement
 #endif
@@ -1340,122 +1382,148 @@ public:
 //loop prediction: only used if high confidence
 //skewed associative 4-way
 //At fetch time: speculative
-#define CONFLOOP 15
+
 	bool getloop(UINT64 PC)
 	{
+
 		LHIT = -1;
-		LI = lindex(PC);
-		LIB = ((PC >> (LOGL - 2)) & ((1 << (LOGL - 2)) - 1));
-		LTAG = (PC >> (LOGL - 2)) & ((1 << 2 * LOOPTAG) - 1);
-		LTAG ^= (LTAG >> LOOPTAG);
-		LTAG = (LTAG & ((1 << LOOPTAG) - 1));
-		for (int i = 0; i < 4; i++)
+		LIB = 0;		
+
+		LI = ((PC>>(2+LOGLOOPWAYS))) & ((1<<LOGL)-1);
+		LTAG = ((PC>>(2+LOGLOOPWAYS)) >> LOGL) & ((1<<LOOPTAG)-1);
+		//LI = ((PC>>(2+LOGLOOPWAYS)) ^ (PC>>((2+LOGLOOPWAYS)*2)) ^ (PC>>((2+LOGLOOPWAYS)*3))) & ((1<<LOGL)-1);
+		//LTAG = ((PC>>(2+LOGLOOPWAYS)) ^ (PC>>((2+LOGLOOPWAYS)*3))) & ((1<<LOOPTAG)-1);
+		LVALID = false;
+		//loopTagMatch = false;
+		//loopCounterMatch = false;
+		for (int i = 0; i < LOOPWAYS; i++)
 		{
-			int index = (LI ^ ((LIB >> i) << 2)) + i;
-			if (ltable[index].TAG == LTAG)
+			lentry entry_ = loopways[i][LI];
+			loopTagMatch[i] = entry_.TAG == LTAG;
+			loopCounterMatch[i] = (entry_.CurrentIter +1  == entry_.NbIter) && (entry_.NbIter > 0);	
+			if ( !LVALID && loopTagMatch[i])
 			{
-				LHIT = i;
-				LVALID = ((ltable[index].confid == CONFLOOP) || (ltable[index].confid * ltable[index].NbIter > 128));
-				//LVALID = ((ltable[index].confid == CONFLOOP) );
-				if (ltable[index].CurrentIter + 1 == ltable[index].NbIter)
-					return (!(ltable[index].dir));
-				return ((ltable[index].dir));
-			}
+				//if((entry_.confid == CONFLOOP) || ((entry_.confid+1) * entry_.NbIter > 256))  
+				if((entry_.confid == CONFLOOP) && loopCounterMatch[i]) 
+				{
+					LHIT = i;
+					LVALID = true;
+					return loopCounterMatch[i];
+				}
+			} 
 		}
 
-		LVALID = false;
-		return (false);
+		//LVALID = false;
+		return (true);		// not stand for prediction as origin return value  ***  --felix
 	}
 
 	void loopupdate(UINT64 PC, bool Taken, bool ALLOC)
 	{
-		if (LHIT >= 0)    //tag match
+/*
+		bool mispredict = ALLOC;
+		
+		for (int i = 0; i < LOOPWAYS; i++)
 		{
-			int index = (LI ^ ((LIB >> LHIT) << 2)) + LHIT;
-			//already a hit
-			if (LVALID)
-			{
-				if (Taken != predloop)
-				{
-					// free the entry
-					ltable[index].NbIter = 0;
-					ltable[index].age = 0;
-					ltable[index].confid = 0;
-					ltable[index].CurrentIter = 0;
-					return;
+			lentry * entry_ = &(loopways[i][LI]);
+			//loopTagMatch[i] loopCounterMatch[i]
+			// LVALID   : use loop predictor   match & high confid
+			// predloop : loop prediction
+			if (loopTagMatch[i]) {
+				//printf("%llx, %ld %ld %ld %ld\n", PC, Taken, entry_->CurrentIter, entry_->NbIter, entry_->confid);
+				if( Taken ) {
+					if (entry_->CurrentIter < MAXITERATION) {
+						entry_->CurrentIter++;
+					} 
+				} else {
+						entry_->NbIter = entry_->CurrentIter;
+						entry_->CurrentIter = 0;
 				}
-				else if ((predloop != tage_pred) || ((MYRANDOM() & 7) == 0))
-					if (ltable[index].age < CONFLOOP)
-						ltable[index].age++;
-			}
 
-			ltable[index].CurrentIter++;
-			ltable[index].CurrentIter &= ((1 << WIDTHNBITERLOOP) - 1);
-			//loop with more than 2** WIDTHNBITERLOOP iterations are not treated correctly; but who cares :-)
-			if (ltable[index].CurrentIter > ltable[index].NbIter)
-			{
-				ltable[index].confid = 0;
-				ltable[index].NbIter = 0;
-				//treat like the 1st encounter of the loop
-			}
-			if (Taken != ltable[index].dir)
-			{
-				if (ltable[index].CurrentIter == ltable[index].NbIter)
-				{
-					if (ltable[index].confid < CONFLOOP)
-						ltable[index].confid++;
-					if (ltable[index].NbIter < 3)
-					//just do not predict when the loop count is 1 or 2
-					{
-						// free the entry
-						ltable[index].dir = Taken;
-						ltable[index].NbIter = 0;
-						ltable[index].age = 0;
-						ltable[index].confid = 0;
+				if( !Taken && (entry_->NbIter == entry_->CurrentIter) && (entry_->NbIter > 0) ) {
+					if (entry_->confid < CONFLOOP) {
+						entry_->confid++; 
+						entry_->CurrentIter = 0;
 					}
 				}
-				else
-				{
-					if (ltable[index].NbIter == 0)
-					{
-						// first complete nest;
-						ltable[index].confid = 0;
-						ltable[index].NbIter = ltable[index].CurrentIter;
-					}
-					else
-					{
-						//not the same number of iterations as last time: free the entry
-						ltable[index].NbIter = 0;
-						ltable[index].confid = 0;
+				if (entry_->age < ((1<<LOOPAGE)-1)) {
+					entry_->age++;
+				}
+			} else if ( ALLOC ) {
+				if(entry_->age == 0) {
+					entry_->CurrentIter = 1;
+					entry_->confid = 0;
+					entry_->TAG = LTAG;
+				} else {
+					if(entry_->age>0) {
+						entry_->age--;
 					}
 				}
-				ltable[index].CurrentIter = 0;
 			}
+			write_info_loop(PC, entry_, loopTagMatch[i], ALLOC, Taken);
 		}
-		else if (ALLOC)
+//*/
+
+//*
+		//bool mispredict = LVALID & ALLOC;
+		bool mispredict = ALLOC;  // 只有当LVALID 有效是，LOOP predictor 才纠正 tage 的预测结果
+		for (int i = 0; i < LOOPWAYS; i++)
 		{
-			UINT64 X = MYRANDOM() & 3;
-			if ((MYRANDOM() & 3) == 0)
-				for (int i = 0; i < 4; i++)
-				{
-					int LHIT = (X + i) & 3;
-					int index = (LI ^ ((LIB >> LHIT) << 2)) + LHIT;
-					if (ltable[index].age == 0)
-					{
-						ltable[index].dir = !Taken;
-						// most of mispredictions are on last iterations
-						ltable[index].TAG = LTAG;
-						ltable[index].NbIter = 0;
-						ltable[index].age = 7;
-						ltable[index].confid = 0;
-						ltable[index].CurrentIter = 0;
-						break;
-					}
-					else
-						ltable[index].age--;
-					break;
+			lentry * entry_ = &(loopways[i][LI]);
+			if (mispredict) 
+			{
+				if(loopTagMatch[i] && (entry_->confid==CONFLOOP)) {
+					entry_->CurrentIter = 0;
+					entry_->confid = 0;
+				} else if(!loopTagMatch[i] && (entry_->confid==CONFLOOP)) {
+
+				} else if(loopTagMatch[i] && (entry_->confid!=0) && loopCounterMatch[i]) {
+					if (entry_->confid < CONFLOOP) 
+						entry_->confid += 1;
+					entry_->CurrentIter = 0;
+				} else if(loopTagMatch[i] && (entry_->confid!=0) && !loopCounterMatch[i]) {
+					entry_->NbIter = entry_->CurrentIter + 1;
+					entry_->CurrentIter = 0;
+					entry_->confid = 0;					
+				} else if(!loopTagMatch[i] && (entry_->confid!=0) && (entry_->age==0) ) {
+					entry_->NbIter = entry_->CurrentIter + 1;
+					entry_->CurrentIter = 0;
+					entry_->confid = 1;				
+					entry_->TAG = LTAG;   // new entry
+				} else if(!loopTagMatch[i] && (entry_->confid!=0) && (entry_->age!=0) ) {
+					if (entry_->age >0) 
+						entry_->age--;
+				} else if(loopTagMatch[i] && (entry_->confid==0) && loopCounterMatch[i] ) {
+					entry_->age = ((1<<LOOPAGE)-1);
+					entry_->CurrentIter = 0;
+					entry_->confid = 1;				
+				} else if(loopTagMatch[i] && (entry_->confid==0) && !loopCounterMatch[i] ) {
+					entry_->NbIter = entry_->CurrentIter + 1;		
+					entry_->age = ((1<<LOOPAGE)-1);		
+					entry_->CurrentIter = 0;		
+				}  else if(!loopTagMatch[i] && (entry_->confid==0)) {
+					entry_->TAG = LTAG;   // new entry
+					entry_->confid = 1;	
+					entry_->age = ((1<<LOOPAGE)-1);
+					entry_->NbIter = entry_->CurrentIter + 1;
+					entry_->CurrentIter = 0;
 				}
+			}
+			else
+			{
+				if (loopTagMatch[i] ) {
+					if(loopCounterMatch[i] && (entry_->confid==CONFLOOP)) {
+						entry_->age = ((1<<LOOPAGE)-1);
+						entry_->CurrentIter = 0;
+					} else {
+						entry_->CurrentIter += 1;
+						if(entry_->age < ((1<<LOOPAGE)-1)) {
+							entry_->age += 1;
+						}
+					}
+				}
+			}
 		}
+//*/
 	}
 #endif
 };
